@@ -1,20 +1,44 @@
+# ===========================
 # Node.js
+# ===========================
 node_modules/
-npm-debug.log
-yarn-error.log
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
+# ===========================
 # Environment variables
+# ===========================
 .env
 .env.local
 .env.*.local
 
+# ===========================
+# Build outputs
+# ===========================
+dist/
+build/
+**/build/
+.next/
+out/
+**/.next/
+**/out/
+
+# ===========================
 # OS files
+# ===========================
 .DS_Store
 Thumbs.db
 
-# Frontend build
-/frontend/.next
-/frontend/out
-/frontend/build
+# ===========================
+# Logs
+# ===========================
+*.log
+logs/
+**/logs/
 
-# Backend build (if any)
+# ===========================
+# Misc
+# ===========================
+coverage/
