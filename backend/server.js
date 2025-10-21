@@ -29,8 +29,25 @@ if (envPath) {
 const app = express();
 
 // Allow CORS origin to be configured in environment (useful for deployment)
-const CORS_ORIGIN = "http://localhost:3000";
-app.use(cors({ origin: CORS_ORIGIN }));
+const allowedOrigins = [
+  "http://localhost:3000",            // local development
+  "https://healthmate-two.vercel.app" // deployed frontend
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn("❌ Blocked by CORS:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, // Optional if using cookies/sessions
+  })
+);
+
 app.use(express.json());
 
 // Fail fast if required env vars are missing in production/deploy
