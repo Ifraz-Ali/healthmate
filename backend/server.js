@@ -1,6 +1,9 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+dotenv.config();
+console.log("✅ ENV Loaded:", process.env.CLOUDINARY_API_KEY ? "Cloudinary Key Found" : "Missing Cloudinary Key");
+
 import cors from "cors";
 import fs from "fs";
 
@@ -26,7 +29,7 @@ if (envPath) {
 const app = express();
 
 // Allow CORS origin to be configured in environment (useful for deployment)
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
+const CORS_ORIGIN = "http://localhost:3000";
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 

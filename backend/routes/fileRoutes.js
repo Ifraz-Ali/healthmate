@@ -6,37 +6,54 @@ import File from "../models/File.js";
 
 const router = express.Router();
 
-// multer setup
+/* -------------------------------------------------------------------------- */
+/* 🧰 Multer memory storage setup                                             */
+/* -------------------------------------------------------------------------- */
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// helper to upload buffer to Cloudinary
-function uploadToCloudinary(fileBuffer, mimetype) {
+/* -------------------------------------------------------------------------- */
+/* ☁️ Helper: Upload file buffer to Cloudinary safely                         */
+/* -------------------------------------------------------------------------- */
+function uploadToCloudinary(fileBuffer, mimetype, originalname) {
   return new Promise((resolve, reject) => {
-    // if the file is PDF, explicitly set resource_type = "raw"
     const isPdf = mimetype === "application/pdf";
+
     const options = {
       resource_type: isPdf ? "raw" : "auto",
       folder: "healthmate_uploads",
+      public_id: originalname ? originalname.split(".")[0] : undefined,
+      use_filename: true,
+      unique_filename: false,
+      overwrite: false,
     };
 
     const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
-      if (error) reject(error);
-      else resolve(result);
+      if (error) return reject(error);
+      resolve(result);
     });
 
     stream.end(fileBuffer);
   });
 }
 
-
-// 📤 upload endpoint
+/* -------------------------------------------------------------------------- */
+/* 📤 Upload endpoint (Protected)                                             */
+/* -------------------------------------------------------------------------- */
 router.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file) {
+      console.error("⚠️ No file received in request.");
+      return res.status(400).json({ message: "No file uploaded" });
+    }
 
-    const uploadResult = await uploadToCloudinary(req.file.buffer, req.file.mimetype);
+    console.log(`📁 Uploading file: ${req.file.originalname}`);
 
+    const uploadResult = await uploadToCloudinary(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname
+    );
 
     const newFile = new File({
       user: req.user.id,
@@ -47,35 +64,29 @@ router.post("/upload", verifyToken, upload.single("file"), async (req, res) => {
 
     await newFile.save();
 
+    console.log("✅ File uploaded successfully:", uploadResult.secure_url);
+
     res.json({
       message: "File uploaded successfully ✅",
       file: newFile,
     });
   } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ message: "Server error during upload", error: err.message });
   }
 });
-// Add this to /routes/fileRoute.js (at the end, before 'export default router;')
 
 /* -------------------------------------------------------------------------- */
-/* 📂 Get all files for the logged-in user                                     */
+/* 📂 Get all files for logged-in user                                        */
 /* -------------------------------------------------------------------------- */
 router.get("/", verifyToken, async (req, res) => {
-  try {
-    // Find all files for the current user (req.user.id)
-    // Sort them by newest first (descending)
-    const files = await File.find({ user: req.user.id }).sort({ uploadedAt: -1 });
-    
-    if (!files) {
-      return res.json([]); // Return empty array, not an error
-    }
-
-    res.json(files);
-  } catch (err) {
-    console.error("Error fetching files:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
+  try {
+    const files = await File.find({ user: req.user.id }).sort({ uploadedAt: -1 });
+    res.json(files || []);
+  } catch (err) {
+    console.error("❌ Error fetching files:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
 });
 
 export default router;
