@@ -3,6 +3,7 @@ import axios from "axios";
 const API = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
 });
+console.log("✅ API Base URL:", API.defaults.baseURL);
 
 // Add token automatically
 API.interceptors.request.use((req) => {

@@ -1,9 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-dotenv.config();
-console.log("✅ ENV Loaded:", process.env.CLOUDINARY_API_KEY ? "Cloudinary Key Found" : "Missing Cloudinary Key");
-
 import cors from "cors";
 import fs from "fs";
 
@@ -12,7 +9,11 @@ import { verifyToken } from "./middleware/authMiddleware.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 
-// Load environment file robustly: prefer .env, fall back to .env.local
+/* -------------------------------------------------------------------------- */
+/* 🔐 Load environment variables                                              */
+/* -------------------------------------------------------------------------- */
+
+// Load .env or .env.local automatically
 let envPath;
 if (fs.existsSync(".env")) envPath = ".env";
 else if (fs.existsSync(".env.local")) envPath = ".env.local";
@@ -21,19 +22,27 @@ if (envPath) {
   dotenv.config({ path: envPath });
   console.log(`🔐 Loaded environment from ${envPath}`);
 } else {
-  // still attempt a normal config (no-op if nothing exists)
   dotenv.config();
-  console.warn("⚠️ No .env or .env.local file found; relying on process.env");
+  console.warn("⚠️ No .env or .env.local found, using process.env directly");
 }
+
+console.log(
+  "✅ ENV Loaded:",
+  process.env.CLOUDINARY_API_KEY ? "Cloudinary Key Found" : "Missing Cloudinary Key"
+);
 
 const app = express();
 
-// Allow CORS origin to be configured in environment (useful for deployment)
+/* -------------------------------------------------------------------------- */
+/* 🌐 CORS configuration                                                      */
+/* -------------------------------------------------------------------------- */
+
 const allowedOrigins = [
-  "http://localhost:3000",            // local development
-  "https://healthmate-two.vercel.app" // deployed frontend
+  "http://localhost:3000",               // Local dev
+  "https://healthmate-two.vercel.app",   // Deployed frontend
 ];
 
+// Dynamic CORS to handle both localhost & production
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -44,35 +53,46 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-    credentials: true, // Optional if using cookies/sessions
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
 app.use(express.json());
 
-// Fail fast if required env vars are missing in production/deploy
+/* -------------------------------------------------------------------------- */
+/* 🧩 Validate environment before startup                                     */
+/* -------------------------------------------------------------------------- */
+
 const requiredEnvs = ["MONGO_URI", "JWT_SECRET"];
-const missing = requiredEnvs.filter((k) => !process.env[k]);
-if (missing.length) {
+const missing = requiredEnvs.filter((key) => !process.env[key]);
+if (missing.length > 0) {
   console.error(`❌ Missing required environment variables: ${missing.join(", ")}`);
-  // Exit with non-zero so deployment platforms detect the failure
   process.exit(1);
 }
+
+/* -------------------------------------------------------------------------- */
+/* 🔗 Connect MongoDB                                                         */
+/* -------------------------------------------------------------------------- */
 
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ Mongo connected"))
   .catch((err) => {
-    console.error("❌ Mongo error", err);
-    // Exit so platform sees the crash and you can inspect logs
+    console.error("❌ MongoDB connection error:", err);
     process.exit(1);
   });
+
+/* -------------------------------------------------------------------------- */
+/* 🚀 API Routes                                                              */
+/* -------------------------------------------------------------------------- */
 
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/ai", aiRoutes);
 
-// test protected route
+// Protected test route
 app.get("/api/protected", verifyToken, (req, res) => {
   res.json({
     message: "Access granted to protected route ✅",
@@ -80,7 +100,15 @@ app.get("/api/protected", verifyToken, (req, res) => {
   });
 });
 
-app.get("/", (req, res) => res.send("HealthMate server running"));
+// Root health check
+app.get("/", (req, res) => res.send("✅ HealthMate backend is running!"));
+
+// 404 fallback
+app.use((req, res) => res.status(404).json({ message: "Route not found ❌" }));
+
+/* -------------------------------------------------------------------------- */
+/* 🏁 Start server                                                            */
+/* -------------------------------------------------------------------------- */
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
