@@ -34,30 +34,29 @@ console.log(
 const app = express();
 
 /* -------------------------------------------------------------------------- */
-/* 🌐 CORS configuration                                                      */
+/* 🌐 CORS configuration — safe for Railway + Vercel + local dev              */
 /* -------------------------------------------------------------------------- */
 
 const allowedOrigins = [
-  "http://localhost:3000",               // Local dev
-  "https://healthmate-two.vercel.app",   // Deployed frontend
+  "http://localhost:3000",              // Local dev
+  "https://healthmate-two.vercel.app",  // Production frontend
 ];
 
-// Dynamic CORS to handle both localhost & production
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn("❌ Blocked by CORS:", origin);
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+// ✅ Universal CORS middleware (handles preflight too)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 app.use(express.json());
 
