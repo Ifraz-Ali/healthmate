@@ -9,11 +9,7 @@ import { verifyToken } from "./middleware/authMiddleware.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 
-/* -------------------------------------------------------------------------- */
-/* 🔐 Load environment variables                                              */
-/* -------------------------------------------------------------------------- */
-
-// Load .env or .env.local automatically
+// Load environment file robustly: prefer .env, fall back to .env.local
 let envPath;
 if (fs.existsSync(".env")) envPath = ".env";
 else if (fs.existsSync(".env.local")) envPath = ".env.local";
@@ -23,75 +19,64 @@ if (envPath) {
   console.log(`🔐 Loaded environment from ${envPath}`);
 } else {
   dotenv.config();
-  console.warn("⚠️ No .env or .env.local found, using process.env directly");
+  console.warn("⚠️ No .env or .env.local file found; relying on process.env");
 }
 
-console.log(
-  "✅ ENV Loaded:",
-  process.env.CLOUDINARY_API_KEY ? "Cloudinary Key Found" : "Missing Cloudinary Key"
-);
+console.log("✅ ENV Loaded:", process.env.CLOUDINARY_API_KEY ? "Cloudinary Key Found" : "Missing Cloudinary Key");
 
 const app = express();
 
-/* -------------------------------------------------------------------------- */
-/* 🌐 CORS configuration — safe for Railway + Vercel + local dev              */
-/* -------------------------------------------------------------------------- */
-
+// Allow CORS origin to be configured in environment (useful for deployment)
 const allowedOrigins = [
-  "http://localhost:3000",              // Local dev
-  "https://healthmate-two.vercel.app",  // Production frontend
+  "http://localhost:3000",            // local development
+  "https://healthmate-two.vercel.app" // deployed frontend
 ];
 
-// ✅ Universal CORS middleware (handles preflight too)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
+// CORS configuration - MUST be before other middleware
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn("❌ Blocked by CORS:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 600 // Cache preflight for 10 minutes
+};
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
-/* -------------------------------------------------------------------------- */
-/* 🧩 Validate environment before startup                                     */
-/* -------------------------------------------------------------------------- */
-
+// Fail fast if required env vars are missing in production/deploy
 const requiredEnvs = ["MONGO_URI", "JWT_SECRET"];
-const missing = requiredEnvs.filter((key) => !process.env[key]);
-if (missing.length > 0) {
+const missing = requiredEnvs.filter((k) => !process.env[k]);
+if (missing.length) {
   console.error(`❌ Missing required environment variables: ${missing.join(", ")}`);
   process.exit(1);
 }
-
-/* -------------------------------------------------------------------------- */
-/* 🔗 Connect MongoDB                                                         */
-/* -------------------------------------------------------------------------- */
 
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ Mongo connected"))
   .catch((err) => {
-    console.error("❌ MongoDB connection error:", err);
+    console.error("❌ Mongo error", err);
     process.exit(1);
   });
-
-/* -------------------------------------------------------------------------- */
-/* 🚀 API Routes                                                              */
-/* -------------------------------------------------------------------------- */
 
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/ai", aiRoutes);
 
-// Protected test route
+// test protected route
 app.get("/api/protected", verifyToken, (req, res) => {
   res.json({
     message: "Access granted to protected route ✅",
@@ -99,15 +84,13 @@ app.get("/api/protected", verifyToken, (req, res) => {
   });
 });
 
-// Root health check
-app.get("/", (req, res) => res.send("✅ HealthMate backend is running!"));
+app.get("/", (req, res) => res.send("HealthMate server running"));
 
-// 404 fallback
-app.use((req, res) => res.status(404).json({ message: "Route not found ❌" }));
-
-/* -------------------------------------------------------------------------- */
-/* 🏁 Start server                                                            */
-/* -------------------------------------------------------------------------- */
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Error:", err);
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
