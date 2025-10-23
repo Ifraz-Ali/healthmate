@@ -26,34 +26,19 @@ console.log("✅ ENV Loaded:", process.env.CLOUDINARY_API_KEY ? "Cloudinary Key 
 
 const app = express();
 
-// Allow CORS origin to be configured in environment (useful for deployment)
-const allowedOrigins = [
-  "http://localhost:3000",            // local development
-  "https://healthmate-two.vercel.app" // deployed frontend
-];
-
-// CORS configuration - MUST be before other middleware
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn("❌ Blocked by CORS:", origin);
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+// ============ CRITICAL: CORS MUST BE FIRST ============
+// Simple CORS configuration that works
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "https://healthmate-two.vercel.app"
+  ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  maxAge: 600 // Cache preflight for 10 minutes
-};
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
-app.use(cors(corsOptions));
-
+// Parse JSON bodies
 app.use(express.json());
 
 // Fail fast if required env vars are missing in production/deploy
@@ -72,19 +57,27 @@ mongoose
     process.exit(1);
   });
 
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    message: "HealthMate server running",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/ai", aiRoutes);
 
-// test protected route
+// Test protected route
 app.get("/api/protected", verifyToken, (req, res) => {
   res.json({
     message: "Access granted to protected route ✅",
     userId: req.user.id,
   });
 });
-
-app.get("/", (req, res) => res.send("HealthMate server running"));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -93,4 +86,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server listening on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
